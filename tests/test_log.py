@@ -20,13 +20,13 @@ def test_reload_keeps_messages_nodes_and_view(tmp_path):
     log.append("user", "hi", WHEN)
     log.append("unii", "héllo", WHEN)
     log.add_node(1, 0, "user: hi\nunii: héllo", WHEN)
-    log.save_view([(1, 0)], draining=True)
+    log.save_view([(1, 0)], draining=True, last_blocks=3)
     log.close()
     log = Log(tmp_path)
     assert [m["text"] for m in log.messages] == ["hi", "héllo"]
     assert log.messages[1]["size"] == 6
     assert log.nodes == {(1, 0): "user: hi\nunii: héllo"}
-    assert log.load_view() == ([(1, 0)], True)
+    assert log.load_view() == ([(1, 0)], True, 3)
 
 
 def test_second_writer_is_refused(tmp_path):

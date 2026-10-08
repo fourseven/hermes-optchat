@@ -96,8 +96,31 @@ def view_marks(chat, blocks):
 
     OpenRouter showed no lookback from a mark to an earlier entry, for Luna and for Claude.
     """
-    previous, chat.last_blocks = chat.last_blocks, blocks
+    previous = chat.turn_started(blocks)
     return sorted({k for k in (previous - 1, blocks - 1) if 0 <= k < blocks})
+
+
+def install_cache_mark_patch():
+    """Monkey patch: Hermes strips every cache_control and re-applies its own on each attempt
+    (agent/turn_api_request.py:113), adding none on routes without Anthropic-style caching
+    (Luna on OpenRouter). After it runs, put the engine's view marks back on those routes.
+    Routes Hermes marks itself are left alone: it already spends all 4 breakpoints there.
+    """
+    import agent.conversation_loop as loop
+
+    original = loop._redecorate_prompt_cache_for_provider
+    if getattr(original, "optchat", False):
+        return
+
+    def redecorate(agent, api_messages, **kwargs):
+        messages, prepared, tools = original(agent, api_messages, **kwargs)
+        engine = getattr(agent, "context_compressor", None)
+        if isinstance(engine, OptChatEngine) and not agent._use_prompt_caching:
+            messages = engine.restore_marks(messages)
+        return messages, prepared, tools
+
+    redecorate.optchat = True
+    loop._redecorate_prompt_cache_for_provider = redecorate
 
 
 class OptChatEngine(ContextEngine):
@@ -174,6 +197,19 @@ class OptChatEngine(ContextEngine):
     def on_turn_complete(self, messages, usage=None, **kwargs):
         if self.chat is not None and self.turn is not None:
             self._log(messages[self.turn :])
+
+    def restore_marks(self, messages):
+        """Put the view's cache marks back on a request Hermes stripped them from."""
+        blocks = self.view[0] if self.turn is not None else []
+        for k, message in enumerate(messages):
+            content = message.get("content")
+            if message.get("role") == "user" and isinstance(content, list) and len(content) == len(blocks) \
+                    and content and content[0].get("text") == blocks[0]:
+                parts = [dict(part) for part in content]
+                for j in self.marks:
+                    parts[j]["cache_control"] = MARK
+                return [*messages[:k], {**message, "content": parts}, *messages[k + 1 :]]
+        return messages
 
     def get_tool_schemas(self):
         return [ZOOM, DATE]

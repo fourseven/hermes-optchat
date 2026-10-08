@@ -17,11 +17,10 @@ class Chat:
     def __init__(self, root):
         self.log_ = Log(root)
         self.tree = Tree(self.log_)
-        lines, draining = self.log_.load_view()
+        lines, draining, self.last_blocks = self.log_.load_view()
         self.view = View(lines, draining)
         self.changed = threading.Condition()
         self.version = 0
-        self.last_blocks = 0
         self._reset_compaction_view()
 
     def _reset_compaction_view(self):
@@ -49,9 +48,16 @@ class Chat:
                     self.cview.append(i, self._line_bytes, self._built)
                 else:
                     self._reset_compaction_view()
-            self.log_.save_view(self.view.lines, self.view.draining)
+            self.log_.save_view(self.view.lines, self.view.draining, self.last_blocks)
             self.version += 1
             self.changed.notify_all()
+
+    def turn_started(self, blocks):
+        """Record how many whole view blocks this turn sent; returns the previous turn's count."""
+        with self.changed:
+            previous, self.last_blocks = self.last_blocks, blocks
+            self.log_.save_view(self.view.lines, self.view.draining, self.last_blocks)
+            return previous
 
     def put(self, l, i, text, when):
         with self.changed:

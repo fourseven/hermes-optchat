@@ -87,3 +87,15 @@ def test_view_marks_the_last_block_and_where_the_previous_turn_ended(tmp_path):
     assert view_marks(engine.chat, 3) == [2]
     assert view_marks(engine.chat, 5) == [2, 4]
     assert view_marks(engine.chat, 5) == [4]
+
+
+def test_restore_marks_puts_the_view_marks_back_after_hermes_strips_them(tmp_path):
+    engine = start(tmp_path)
+    for k in range(9):
+        engine.chat.log("user", f"old {k}", engine.now())
+    _, request = turn(engine, [], "hi")
+    stripped = [{**m, "content": [{k: v for k, v in p.items() if k != "cache_control"} for p in m["content"]]}
+                if isinstance(m["content"], list) else m for m in request]
+    restored = engine.restore_marks(stripped)
+    assert restored == request
+    assert "cache_control" not in stripped[1]["content"][-1]

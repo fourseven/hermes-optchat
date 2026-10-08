@@ -67,13 +67,13 @@ class Log:
     def load_view(self):
         path = self.root / "view.json"
         if not path.exists():
-            return [], False
+            return [], False, 0
         view = json.loads(path.read_text())
-        return [tuple(line) for line in view["lines"]], view["draining"]
+        return [tuple(line) for line in view["lines"]], view["draining"], view.get("last_blocks", 0)
 
-    def save_view(self, lines, draining):
+    def save_view(self, lines, draining, last_blocks=0):
         tmp = self.root / "view.json.tmp"
-        tmp.write_text(json.dumps({"lines": lines, "draining": draining}))
+        tmp.write_text(json.dumps({"lines": lines, "draining": draining, "last_blocks": last_blocks}))
         os.replace(tmp, self.root / "view.json")
 
     def close(self):
