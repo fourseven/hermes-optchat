@@ -14,9 +14,18 @@ def cost(usage):
     return usage.get("cost") or (usage.get("cost_details") or {}).get("upstream_inference_cost") or 0
 
 
+def tokens(usage):
+    """(prompt, cached) for OpenRouter usage or Anthropic usage from the Claude Code CLI."""
+    if "prompt_tokens" in usage:
+        return usage["prompt_tokens"], (usage.get("prompt_tokens_details") or {}).get("cached_tokens") or 0
+    cached = usage.get("cache_read_input_tokens", 0)
+    return usage.get("input_tokens", 0) + usage.get("cache_creation_input_tokens", 0) + cached, cached
+
+
 def share(calls):
-    prompt = sum(c["usage"].get("prompt_tokens", 0) for c in calls)
-    cached = sum((c["usage"].get("prompt_tokens_details") or {}).get("cached_tokens") or 0 for c in calls)
+    pairs = [tokens(c["usage"]) for c in calls]
+    prompt = sum(p for p, _ in pairs)
+    cached = sum(c for _, c in pairs)
     return cached / prompt if prompt else 0, prompt
 
 

@@ -68,6 +68,8 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="stop after about this many logged messages")
     parser.add_argument("--turn-model", default="openai/gpt-6-luna")
     parser.add_argument("--compact-model", default=MODEL)
+    parser.add_argument("--compact-with", choices=["openrouter", "claude-code"], default="openrouter",
+                        help="claude-code compacts with Haiku on the Claude Code CLI's subscription")
     parser.add_argument("--instructions", default="")
     parser.add_argument("--log-only", action="store_true", help="import without turn calls: compactions only")
     parser.add_argument("--until", type=datetime.fromisoformat, help="stop before this time (ISO, with offset)")
@@ -76,7 +78,13 @@ def main():
     out = Path(args.out)
     instructions = Path(args.instructions).read_text() if args.instructions else ""
     chat = Chat(out / "chat")
-    compactor = Compactor(chat, caller(args.compact_model), system_prompt(instructions), lambda: datetime.now(timezone.utc))
+    if args.compact_with == "claude-code":
+        from . import claudecode
+
+        compact = claudecode.caller()
+    else:
+        compact = caller(args.compact_model)
+    compactor = Compactor(chat, compact, system_prompt(instructions), lambda: datetime.now(timezone.utc))
     # One session id for the whole replay: OpenRouter scopes OpenAI's cache to it.
     turn_call = caller(args.turn_model, {"session_id": "optchat-replay"})
     system = turn_prompt(instructions)
@@ -90,8 +98,7 @@ def main():
     with open(out / "calls.jsonl", "a") as calls:
         for t, turn in enumerate(turns):
             started = time.monotonic()
-            if not args.log_only:
-                chat.wait_summarized(600)
+            chat.wait_summarized(600)
             wait = time.monotonic() - started
             view = chat.render_view()
             marks = view_marks(chat, len(view[0]))
