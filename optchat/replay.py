@@ -90,7 +90,8 @@ def main():
     with open(out / "calls.jsonl", "a") as calls:
         for t, turn in enumerate(turns):
             started = time.monotonic()
-            chat.wait_summarized(600)
+            if not args.log_only:
+                chat.wait_summarized(600)
             wait = time.monotonic() - started
             view = chat.render_view()
             marks = view_marks(chat, len(view[0]))
@@ -112,7 +113,8 @@ def main():
                 for kind, text in _entries(message):
                     chat.log(kind, text, when)
             print(f"turn {t + 1}/{len(turns)}: {len(chat.log_.messages)} messages, view {len(lines)} lines, wait {wait:.1f}s", flush=True)
-    compactor.idle(600)
+    while not compactor.idle(600):
+        print(f"compacting: {sum(1 for l, _ in chat.log_.nodes if l == 0)}/{len(chat.log_.messages)} leaves", flush=True)
     with chat.changed:
         chat.view.drain(len(chat.log_.messages), chat._line_bytes, chat._built)
         chat.log_.save_view(chat.view.lines, chat.view.draining, chat.last_blocks)
