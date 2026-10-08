@@ -91,6 +91,15 @@ def compose(system, view, state, turn, marks=()):
     return [{"role": "system", "content": system}, *view, user, *turn[1:]]
 
 
+def chat_key(conversation_id):
+    """One chat per user or channel: agent:<profile>:<platform>:<chat type>:<chat id>.
+
+    Gateway keys add a per-thread or per-session suffix (Telegram DMs get a new one per thread),
+    which would split the chat that never ends.
+    """
+    return ":".join((conversation_id or "cli").split(":")[:5])
+
+
 def view_marks(chat, blocks):
     """Mark the last block, and where the previous turn's view ended so this turn finds its entry.
 
@@ -142,7 +151,7 @@ class OptChatEngine(ContextEngine):
 
     def on_session_start(self, session_id, hermes_home=None, platform="cli", model="", conversation_id=None, **kwargs):
         home = Path(hermes_home) / "optchat"
-        key = re.sub(r"[^A-Za-z0-9_.-]", "_", conversation_id or "cli")
+        key = re.sub(r"[^A-Za-z0-9_.-]", "_", chat_key(conversation_id))
         path = home / "instructions.md"
         instructions = path.read_text() if path.exists() else ""
         self.system = turn_prompt(instructions)

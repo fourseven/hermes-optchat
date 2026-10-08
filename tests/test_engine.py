@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("agent.context_engine")
 
 import optchat.engine  # noqa: E402
-from optchat.engine import ACK, OptChatEngine, view_marks  # noqa: E402
+from optchat.engine import ACK, OptChatEngine, chat_key, view_marks  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -99,3 +99,9 @@ def test_restore_marks_puts_the_view_marks_back_after_hermes_strips_them(tmp_pat
     restored = engine.restore_marks(stripped)
     assert restored == request
     assert "cache_control" not in stripped[1]["content"][-1]
+
+
+def test_one_chat_per_user_or_channel_across_threads():
+    assert chat_key("agent:main:telegram:dm:123456789:229149") == "agent:main:telegram:dm:123456789"
+    assert chat_key("agent:main:telegram:dm:123456789") == "agent:main:telegram:dm:123456789"
+    assert chat_key(None) == "cli"
