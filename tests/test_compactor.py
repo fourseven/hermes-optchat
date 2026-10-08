@@ -81,3 +81,8 @@ def test_usage_is_logged_per_call(tmp_path):
     run(tmp_path, Fake("s"), LONG)
     [row] = [json.loads(line) for line in (tmp_path / "usage.jsonl").read_text().splitlines()]
     assert row["kind"] == "compaction" and row["node"] == [0, 0] and row["usage"] == {"prompt_tokens": 10}
+
+
+def test_an_id_head_the_model_wrote_is_dropped(tmp_path):
+    chat = run(tmp_path, Fake("240+16|unii: summary"), LONG)
+    assert chat.log_.nodes[(0, 0)] == "unii: summary"

@@ -1,4 +1,5 @@
 import logging
+import re
 import threading
 from concurrent.futures import ThreadPoolExecutor
 
@@ -8,6 +9,8 @@ from .tree import LINE
 
 logger = logging.getLogger(__name__)
 
+# Haiku 5.5 began 4 of 20 spot-checked lines with an id head ("12|", "240+16|") despite the prompt.
+HEAD = re.compile(r"^\d+(?:[+-]\d+)?\|")
 LANES = 8
 TRIES = 5
 MARK = {"type": "ephemeral"}
@@ -81,7 +84,7 @@ class Compactor:
             for attempt in range(TRIES):
                 text, usage = self._call_once(messages, prefix if attempt == 0 else None)
                 self.chat.record_usage({"kind": "compaction", "node": list(task), "attempt": attempt, "usage": usage})
-                text = text.strip()
+                text = HEAD.sub("", text.strip())
                 if best is None or size(text) < size(best):
                     best = text
                 if size(text) <= LINE:
