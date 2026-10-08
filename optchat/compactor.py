@@ -52,7 +52,11 @@ class Compactor:
                     changed.wait()
                     continue
                 self.inflight += 1
-                self.pool.submit(self._build, task, self._request(*task))
+                try:
+                    self.pool.submit(self._build, task, self._request(*task))
+                except RuntimeError:
+                    # The interpreter is exiting (a one-shot CLI turn); unbuilt nodes requeue at the next start.
+                    return
 
     def _request(self, l, i):
         blocks, tail = self.chat.compaction_view(l, i)
