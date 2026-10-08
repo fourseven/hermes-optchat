@@ -5,7 +5,13 @@ import pytest
 
 pytest.importorskip("agent.context_engine")
 
+import optchat.engine  # noqa: E402
 from optchat.engine import ACK, OptChatEngine  # noqa: E402
+
+
+@pytest.fixture(autouse=True)
+def no_model(monkeypatch):
+    monkeypatch.setattr(optchat.engine, "_caller", lambda: lambda messages: ("line", {}))
 
 
 def start(tmp_path, model="m1", day=8):

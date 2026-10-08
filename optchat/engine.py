@@ -8,13 +8,11 @@ from pathlib import Path
 from agent.context_engine import ContextEngine
 
 from .chat import Chat
+from .compactor import ACK, Compactor
 from .prompt import system_prompt
 
 logger = logging.getLogger(__name__)
 
-# Hermes merges adjacent user messages; this keeps the view its own message, so its
-# last whole block carries a cache mark.
-ACK = "(the chat continues below)"
 WAIT = 120
 
 _chats = {}
@@ -39,10 +37,19 @@ DATE = {
 }
 
 
-def _open_chat(root):
+def _caller():
+    from .openrouter import caller
+
+    return caller()
+
+
+def _open_chat(root, system):
+    """One Chat and one Compactor per chat directory, shared by every agent in the process."""
     with _chats_lock:
         if root not in _chats:
-            _chats[root] = Chat(root)
+            chat = Chat(root)
+            Compactor(chat, _caller(), system, lambda: datetime.now(timezone.utc))
+            _chats[root] = chat
         return _chats[root]
 
 
@@ -75,7 +82,7 @@ class OptChatEngine(ContextEngine):
 
     def __init__(self):
         self.chat = None
-        self.instructions = ""
+        self.system = ""
         self.platform = self.model = ""
         self.turn = None
         self.logged = 0
@@ -88,9 +95,9 @@ class OptChatEngine(ContextEngine):
     def on_session_start(self, session_id, hermes_home=None, platform="cli", model="", conversation_id=None, **kwargs):
         home = Path(hermes_home) / "optchat"
         key = re.sub(r"[^A-Za-z0-9_.-]", "_", conversation_id or "cli")
-        self.chat = _open_chat(home / "chats" / key)
         path = home / "instructions.md"
-        self.instructions = path.read_text() if path.exists() else ""
+        self.system = system_prompt(path.read_text() if path.exists() else "")
+        self.chat = _open_chat(home / "chats" / key, self.system)
         self.platform, self.model = platform, model
 
     def clone_for_agent(self):
@@ -104,6 +111,8 @@ class OptChatEngine(ContextEngine):
         self.last_prompt_tokens = usage.get("prompt_tokens", 0)
         self.last_completion_tokens = usage.get("completion_tokens", 0)
         self.last_total_tokens = usage.get("total_tokens", 0)
+        if self.chat is not None:
+            self.chat.record_usage({"kind": "turn", "model": self.model, "usage": usage})
 
     def should_compress(self, prompt_tokens=None):
         return False
@@ -126,7 +135,7 @@ class OptChatEngine(ContextEngine):
         content = sent[0].get("content")
         user = {**sent[0], "content": head + content if isinstance(content, str) else [{"type": "text", "text": head}, *content]}
         view = [{"role": "user", "content": [{"type": "text", "text": b} for b in blocks]}, {"role": "assistant", "content": ACK}] if blocks else []
-        return [{"role": "system", "content": system_prompt(self.instructions)}, *view, user, *sent[1:]]
+        return [{"role": "system", "content": self.system}, *view, user, *sent[1:]]
 
     def _start_turn(self, k, incoming):
         if not self.chat.wait_summarized(WAIT):
