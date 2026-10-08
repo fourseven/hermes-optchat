@@ -75,6 +75,16 @@ def _entries(message):
     return entries
 
 
+def compose(system, view, state, turn):
+    """[system] [view as 4-line blocks] [ack] [view tail, state and this turn's messages]."""
+    blocks, tail = view
+    head = f"{tail}\n\n{state}\n\n"
+    content = turn[0].get("content")
+    user = {**turn[0], "content": head + content if isinstance(content, str) else [{"type": "text", "text": head}, *content]}
+    view = [{"role": "user", "content": [{"type": "text", "text": b} for b in blocks]}, {"role": "assistant", "content": ACK}] if blocks else []
+    return [{"role": "system", "content": system}, *view, user, *turn[1:]]
+
+
 class OptChatEngine(ContextEngine):
     """One chat that never ends: each request is [system] [view] [this turn's messages]."""
 
@@ -130,13 +140,8 @@ class OptChatEngine(ContextEngine):
         if self.turn != k:
             self._start_turn(k, incoming_message)
         self._log(turn)
-        blocks, tail = self.view
         state = f"[turn · {self.now().isoformat(timespec='minutes')} · {self.platform} · {self.model}]"
-        head = f"{tail}\n\n{state}\n\n"
-        content = sent[0].get("content")
-        user = {**sent[0], "content": head + content if isinstance(content, str) else [{"type": "text", "text": head}, *content]}
-        view = [{"role": "user", "content": [{"type": "text", "text": b} for b in blocks]}, {"role": "assistant", "content": ACK}] if blocks else []
-        return [{"role": "system", "content": self.system}, *view, user, *sent[1:]]
+        return compose(self.system, self.view, state, sent)
 
     def _start_turn(self, k, incoming):
         if not self.chat.wait_summarized(WAIT):
