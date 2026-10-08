@@ -1,6 +1,7 @@
 import json
 import subprocess
 import tempfile
+import time
 
 MODEL = "claude-haiku-5-5"
 
@@ -24,10 +25,17 @@ def caller(model=MODEL):
         prompt = "\n\n".join(
             _text(m["content"]) if m["role"] == "user" else f"(Your previous reply:)\n{_text(m['content'])}"
             for m in messages[1:])
-        out = subprocess.run(
-            ["claude", "-p", "--model", model, "--system-prompt", system, "--tools", "",
-             "--output-format", "json", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config"],
-            input=prompt, capture_output=True, text=True, timeout=300, cwd=workdir, check=True)
+        args = ["claude", "-p", "--model", model, "--system-prompt", system, "--tools", "",
+                "--output-format", "json", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config"]
+        for attempt in range(3):
+            try:
+                out = subprocess.run(args, input=prompt, capture_output=True, text=True, timeout=300, cwd=workdir, check=True)
+                break
+            except FileNotFoundError:
+                # Claude Code auto-updates replace the binary; a call during the swap finds nothing.
+                if attempt == 2:
+                    raise
+                time.sleep(10)
         events = json.loads(out.stdout)
         result = [e for e in events if e.get("type") == "result"][-1] if isinstance(events, list) else events
         if result.get("is_error") or model not in (result.get("modelUsage") or {}):

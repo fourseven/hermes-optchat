@@ -68,6 +68,7 @@ def main():
     parser.add_argument("--limit", type=int, default=0, help="stop after about this many logged messages")
     parser.add_argument("--turn-model", default="openai/gpt-6-luna")
     parser.add_argument("--compact-model", default=MODEL)
+    parser.add_argument("--lanes", type=int, default=0, help="compactions at once for an import (the gist's 8 by default)")
     parser.add_argument("--compact-with", choices=["openrouter", "claude-code"], default="openrouter",
                         help="claude-code compacts with Haiku on the Claude Code CLI's subscription")
     parser.add_argument("--instructions", default="")
@@ -76,6 +77,10 @@ def main():
     args = parser.parse_args()
 
     out = Path(args.out)
+    if args.lanes:
+        from . import compactor as compactor_module, tree
+
+        compactor_module.LANES = tree.LEAD = args.lanes
     instructions = Path(args.instructions).read_text() if args.instructions else ""
     chat = Chat(out / "chat")
     if args.compact_with == "claude-code":
@@ -98,7 +103,12 @@ def main():
     with open(out / "calls.jsonl", "a") as calls:
         for t, turn in enumerate(turns):
             started = time.monotonic()
-            chat.wait_summarized(600)
+            while not chat.wait_summarized(60):
+                # Failed calls retry at the next message, and an import logs nothing until this one settles.
+                with chat.changed:
+                    chat.tree.retry.extend(chat.tree.failed)
+                    chat.tree.failed.clear()
+                    chat.changed.notify_all()
             wait = time.monotonic() - started
             view = chat.render_view()
             marks = view_marks(chat, len(view[0]))
