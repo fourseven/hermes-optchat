@@ -6,7 +6,7 @@ import pytest
 pytest.importorskip("agent.context_engine")
 
 import optchat.engine  # noqa: E402
-from optchat.engine import ACK, OptChatEngine  # noqa: E402
+from optchat.engine import ACK, OptChatEngine, view_marks  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -40,7 +40,7 @@ def test_request_is_system_view_and_this_turns_messages(tmp_path):
     system, view, ack, user, *rest = request
     assert system["role"] == "system" and system["content"].endswith("I am Mathew.")
     assert "Compaction" not in system["content"]
-    assert view == {"role": "user", "content": [{"type": "text", "text": "<chat>\n0+1|user: old 0\n1+1|user: old 1\n2+1|user: old 2\n3+1|user: old 3\n"}]}
+    assert view == {"role": "user", "content": [{"type": "text", "text": "<chat>\n0+1|user: old 0\n1+1|user: old 1\n2+1|user: old 2\n3+1|user: old 3\n", "cache_control": {"type": "ephemeral"}}]}
     assert ack == {"role": "assistant", "content": ACK}
     assert user["content"].startswith("4+1|user: old 4\n</chat>\n\n[turn · 2026-10-08T09:30+00:00 · cli · m1]\n\nhi")
     assert rest == [call, result]
@@ -80,3 +80,10 @@ def test_clones_share_one_chat_and_never_compress(tmp_path):
     clone.on_session_start("s2", hermes_home=str(tmp_path), platform="cli", model="m1", conversation_id=None)
     assert clone.chat is engine.chat
     assert not engine.should_compress(10**9)
+
+
+def test_view_marks_the_last_block_and_where_the_previous_turn_ended(tmp_path):
+    engine = start(tmp_path)
+    assert view_marks(engine.chat, 3) == [2]
+    assert view_marks(engine.chat, 5) == [2, 4]
+    assert view_marks(engine.chat, 5) == [4]

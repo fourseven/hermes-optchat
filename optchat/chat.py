@@ -21,6 +21,7 @@ class Chat:
         self.view = View(lines, draining)
         self.changed = threading.Condition()
         self.version = 0
+        self.last_blocks = 0
         self._reset_compaction_view()
 
     def _reset_compaction_view(self):

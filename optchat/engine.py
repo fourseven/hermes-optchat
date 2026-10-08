@@ -8,7 +8,7 @@ from pathlib import Path
 from agent.context_engine import ContextEngine
 
 from .chat import Chat
-from .compactor import ACK, Compactor
+from .compactor import ACK, MARK, Compactor
 from .prompt import system_prompt, turn_prompt
 
 logger = logging.getLogger(__name__)
@@ -75,14 +75,29 @@ def _entries(message):
     return entries
 
 
-def compose(system, view, state, turn):
-    """[system] [view as 4-line blocks] [ack] [view tail, state and this turn's messages]."""
+def compose(system, view, state, turn, marks=()):
+    """[system] [view as 4-line blocks] [ack] [view tail, state and this turn's messages].
+
+    marks: indexes of view blocks to carry a cache mark.
+    """
     blocks, tail = view
     head = f"{tail}\n\n{state}\n\n"
     content = turn[0].get("content")
     user = {**turn[0], "content": head + content if isinstance(content, str) else [{"type": "text", "text": head}, *content]}
-    view = [{"role": "user", "content": [{"type": "text", "text": b} for b in blocks]}, {"role": "assistant", "content": ACK}] if blocks else []
+    parts = [{"type": "text", "text": b} for b in blocks]
+    for k in marks:
+        parts[k]["cache_control"] = MARK
+    view = [{"role": "user", "content": parts}, {"role": "assistant", "content": ACK}] if blocks else []
     return [{"role": "system", "content": system}, *view, user, *turn[1:]]
+
+
+def view_marks(chat, blocks):
+    """Mark the last block, and where the previous turn's view ended so this turn finds its entry.
+
+    OpenRouter showed no lookback from a mark to an earlier entry, for Luna and for Claude.
+    """
+    previous, chat.last_blocks = chat.last_blocks, blocks
+    return sorted({k for k in (previous - 1, blocks - 1) if 0 <= k < blocks})
 
 
 class OptChatEngine(ContextEngine):
@@ -141,12 +156,13 @@ class OptChatEngine(ContextEngine):
             self._start_turn(k, incoming_message)
         self._log(turn)
         state = f"[turn · {self.now().isoformat(timespec='minutes')} · {self.platform} · {self.model}]"
-        return compose(self.system, self.view, state, sent)
+        return compose(self.system, self.view, state, sent, self.marks)
 
     def _start_turn(self, k, incoming):
         if not self.chat.wait_summarized(WAIT):
             logger.warning("optchat: earlier messages still unsummarized after %ss", WAIT)
         self.view = self.chat.render_view()
+        self.marks = view_marks(self.chat, len(self.view[0]))
         self.turn, self.logged = k, 0
 
     def _log(self, turn):

@@ -6,7 +6,6 @@ only the prompt side is measured. Writes calls.jsonl next to the chat and prints
 """
 
 import argparse
-import copy
 import json
 import sqlite3
 import time
@@ -15,12 +14,11 @@ from pathlib import Path
 
 from .chat import Chat
 from .compactor import Compactor
-from .engine import DATE, ZOOM, _entries, compose
+from .engine import DATE, ZOOM, _entries, compose, view_marks
 from .openrouter import MODEL, caller
 from .prompt import system_prompt, turn_prompt
 
 TOOLS = [{"type": "function", "function": schema} for schema in (ZOOM, DATE)]
-MARK = {"type": "ephemeral"}
 
 
 def load(db, sources, limit):
@@ -49,18 +47,6 @@ def load(db, sources, limit):
     return turns
 
 
-def mark(messages):
-    """Anthropic cache marks where Hermes puts them: the view's last block and the request's end."""
-    messages = copy.deepcopy(messages)
-    for message in messages:
-        if message["role"] == "user" and isinstance(message["content"], list):
-            message["content"][-1]["cache_control"] = MARK
-            break
-    last = messages[-1]
-    if isinstance(last["content"], str) and last["content"]:
-        last["content"] = [{"type": "text", "text": last["content"], "cache_control": MARK}]
-    return messages
-
 
 def main():
     parser = argparse.ArgumentParser()
@@ -80,7 +66,6 @@ def main():
     # One session id for the whole replay: OpenRouter scopes OpenAI's cache to it.
     turn_call = caller(args.turn_model, {"session_id": "optchat-replay"})
     system = turn_prompt(instructions)
-    anthropic = args.turn_model.startswith("anthropic/")
     turns = load(args.db, args.sources.split(","), args.limit)
     previous = []
 
@@ -90,6 +75,7 @@ def main():
             chat.wait_summarized(600)
             wait = time.monotonic() - started
             view = chat.render_view()
+            marks = view_marks(chat, len(view[0]))
             lines = list(chat.view.lines)
             kept = next((k for k, (a, b) in enumerate(zip(previous, lines)) if a != b), min(len(previous), len(lines)))
             previous = lines
@@ -97,8 +83,8 @@ def main():
             for c, (message, when) in enumerate(turn):
                 if message["role"] == "assistant" and sent:
                     state = f"[turn · {when.isoformat(timespec='minutes')} · telegram · {args.turn_model}]"
-                    request = compose(system, view, state, sent)
-                    _, usage = turn_call(mark(request) if anthropic else request, max_tokens=16, tools=TOOLS)
+                    request = compose(system, view, state, sent, marks)
+                    _, usage = turn_call(request, max_tokens=16, tools=TOOLS)
                     calls.write(json.dumps({"turn": t, "call": c, "messages": len(chat.log_.messages), "wait": round(wait, 2),
                                             "view_lines": len(lines), "rewritten": len(lines) - kept if first else 0,
                                             "usage": usage}) + "\n")

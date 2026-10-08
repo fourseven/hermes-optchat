@@ -64,7 +64,12 @@ class Compactor:
         messages = [{"role": "system", "content": [{"type": "text", "text": self.system, "cache_control": MARK}]}]
         if blocks:
             parts = [{"type": "text", "text": block} for block in blocks]
-            parts[-1]["cache_control"] = MARK
+            # Each compaction's view ends at its own node, so marks also sit at block counts
+            # aligned to 8 and 32: those positions recur across compactions.
+            n = len(parts)
+            for k in {n - 1, n // 8 * 8 - 1, n // 32 * 32 - 1}:
+                if k >= 0:
+                    parts[k]["cache_control"] = MARK
             messages += [{"role": "user", "content": parts}, {"role": "assistant", "content": ACK}]
         messages.append({"role": "user", "content": f"{tail}\n\n{task}"})
         return messages, tuple(blocks)
