@@ -48,6 +48,15 @@ def load(db, sources, limit):
 
 
 
+def paired(messages):
+    """Drop tool results whose call is not in this turn, as Hermes's sanitizer does.
+
+    A user message can land between a tool call and its result, splitting the pair across turns.
+    """
+    calls = {c.get("id") for m in messages for c in m.get("tool_calls") or []}
+    return [m for m in messages if m["role"] != "tool" or m.get("tool_call_id") in calls]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("db")
@@ -67,6 +76,10 @@ def main():
     turn_call = caller(args.turn_model, {"session_id": "optchat-replay"})
     system = turn_prompt(instructions)
     turns = load(args.db, args.sources.split(","), args.limit)
+    if chat.log_.messages:
+        # Resume: skip what is logged, up to the next user message.
+        last = datetime.fromisoformat(chat.log_.messages[-1]["date"])
+        turns = [turn for turn in turns if turn[0][1] > last and turn[0][0]["role"] == "user"]
     previous = []
 
     with open(out / "calls.jsonl", "a") as calls:
@@ -83,7 +96,7 @@ def main():
             for c, (message, when) in enumerate(turn):
                 if message["role"] == "assistant" and sent:
                     state = f"[turn · {when.isoformat(timespec='minutes')} · telegram · {args.turn_model}]"
-                    request = compose(system, view, state, sent, marks)
+                    request = compose(system, view, state, paired(sent), marks)
                     _, usage = turn_call(request, max_tokens=16, tools=TOOLS)
                     calls.write(json.dumps({"turn": t, "call": c, "messages": len(chat.log_.messages), "wait": round(wait, 2),
                                             "view_lines": len(lines), "rewritten": len(lines) - kept if first else 0,
