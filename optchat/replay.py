@@ -8,6 +8,7 @@ only the prompt side is measured. Writes calls.jsonl next to the chat and prints
 import argparse
 import json
 import sqlite3
+import sys
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -103,8 +104,13 @@ def main():
     with open(out / "calls.jsonl", "a") as calls:
         for t, turn in enumerate(turns):
             started = time.monotonic()
+            stuck = 0
             while not chat.wait_summarized(60):
                 # Failed calls retry at the next message, and an import logs nothing until this one settles.
+                # Calls failing for 10 minutes (a usage limit) end the run; rerunning resumes it.
+                stuck = stuck + 1 if chat.tree.failed else 0
+                if stuck == 10:
+                    sys.exit(f"compactions failing for 10 minutes at message {len(chat.log_.messages)}; stopping")
                 with chat.changed:
                     chat.tree.retry.extend(chat.tree.failed)
                     chat.tree.failed.clear()
