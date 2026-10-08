@@ -85,8 +85,21 @@ text to its real author. Never make anything look further along than it was. If
 told the line is too long, shorten it. Non-ASCII characters cost 2-4 bytes."""
 
 
-def system_prompt(instructions):
-    return f"{SYSTEM}\n\n# The user's instructions\n\n{instructions.strip()}"
+# Turns leave out the compaction section: GPT-6 Luna answered 2 of 3 turns as
+# compactions with it in, 0 of 5 without. Hermes sends its tools ahead of the system
+# prompt and compactions send none, so the two never shared a cache entry anyway.
+TURN = SYSTEM.split("\n\n# Compactions\n")[0].replace(
+    'Each call to you is a turn or a compaction: the view below is followed by\n'
+    'the user\'s new message, or by a task starting "Compaction:".',
+    "Each call to you is a turn: the view below is followed by the user's new\nmessage.")
+
+
+def system_prompt(instructions, base=SYSTEM):
+    return f"{base}\n\n# The user's instructions\n\n{instructions.strip()}"
+
+
+def turn_prompt(instructions):
+    return system_prompt(instructions, TURN)
 
 
 def leaf_task(i, kind, text):

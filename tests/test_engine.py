@@ -39,9 +39,10 @@ def test_request_is_system_view_and_this_turns_messages(tmp_path):
     _, request = turn(engine, [{"role": "user", "content": "stale history"}], "hi", call, result)
     system, view, ack, user, *rest = request
     assert system["role"] == "system" and system["content"].endswith("I am Mathew.")
+    assert "Compaction" not in system["content"]
     assert view == {"role": "user", "content": [{"type": "text", "text": "<chat>\n0+1|user: old 0\n1+1|user: old 1\n2+1|user: old 2\n3+1|user: old 3\n"}]}
     assert ack == {"role": "assistant", "content": ACK}
-    assert user["content"].startswith("4+1|user: old 4\n</chat>\n\n[2026-10-08T09:30+00:00 · cli · m1]\n\nhi")
+    assert user["content"].startswith("4+1|user: old 4\n</chat>\n\n[turn · 2026-10-08T09:30+00:00 · cli · m1]\n\nhi")
     assert rest == [call, result]
 
 

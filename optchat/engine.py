@@ -9,7 +9,7 @@ from agent.context_engine import ContextEngine
 
 from .chat import Chat
 from .compactor import ACK, Compactor
-from .prompt import system_prompt
+from .prompt import system_prompt, turn_prompt
 
 logger = logging.getLogger(__name__)
 
@@ -96,8 +96,9 @@ class OptChatEngine(ContextEngine):
         home = Path(hermes_home) / "optchat"
         key = re.sub(r"[^A-Za-z0-9_.-]", "_", conversation_id or "cli")
         path = home / "instructions.md"
-        self.system = system_prompt(path.read_text() if path.exists() else "")
-        self.chat = _open_chat(home / "chats" / key, self.system)
+        instructions = path.read_text() if path.exists() else ""
+        self.system = turn_prompt(instructions)
+        self.chat = _open_chat(home / "chats" / key, system_prompt(instructions))
         self.platform, self.model = platform, model
 
     def clone_for_agent(self):
@@ -130,7 +131,7 @@ class OptChatEngine(ContextEngine):
             self._start_turn(k, incoming_message)
         self._log(turn)
         blocks, tail = self.view
-        state = f"[{self.now().isoformat(timespec='minutes')} · {self.platform} · {self.model}]"
+        state = f"[turn · {self.now().isoformat(timespec='minutes')} · {self.platform} · {self.model}]"
         head = f"{tail}\n\n{state}\n\n"
         content = sent[0].get("content")
         user = {**sent[0], "content": head + content if isinstance(content, str) else [{"type": "text", "text": head}, *content]}
