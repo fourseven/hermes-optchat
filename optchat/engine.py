@@ -15,6 +15,9 @@ logger = logging.getLogger(__name__)
 
 WAIT = 120
 
+# Cron jobs and delegate_task children carry their own task context; Hermes builds their requests.
+STAND_ASIDE = {"cron", "subagent"}
+
 _chats = {}
 _chats_lock = threading.Lock()
 
@@ -150,6 +153,8 @@ class OptChatEngine(ContextEngine):
         return "optchat"
 
     def on_session_start(self, session_id, hermes_home=None, platform="cli", model="", conversation_id=None, **kwargs):
+        if platform in STAND_ASIDE:
+            return
         home = Path(hermes_home) / "optchat"
         key = re.sub(r"[^A-Za-z0-9_.-]", "_", chat_key(conversation_id))
         path = home / "instructions.md"
@@ -224,6 +229,8 @@ class OptChatEngine(ContextEngine):
         return [ZOOM, DATE]
 
     def handle_tool_call(self, name, args, **kwargs):
+        if self.chat is None:
+            return json.dumps({"error": "zoom and date work in the main chat only"})
         try:
             if name == "zoom":
                 return json.dumps({"result": self.chat.zoom(int(args["id"]), int(args["n"]))})

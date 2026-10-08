@@ -21,7 +21,7 @@ from .prompt import system_prompt, turn_prompt
 TOOLS = [{"type": "function", "function": schema} for schema in (ZOOM, DATE)]
 
 
-def load(db, sources, limit):
+def load(db, sources, limit, until=None):
     query = f"""
         select m.role, m.content, m.tool_calls, m.tool_call_id, m.timestamp
         from messages m join sessions s on s.id = m.session_id
@@ -35,7 +35,10 @@ def load(db, sources, limit):
             message["tool_calls"] = json.loads(tool_calls)
         if tool_call_id:
             message["tool_call_id"] = tool_call_id
-        messages.append((message, datetime.fromtimestamp(ts, timezone.utc)))
+        when = datetime.fromtimestamp(ts, timezone.utc)
+        if until and when >= until:
+            break
+        messages.append((message, when))
     turns, logged = [], 0
     for message, when in messages:
         if message["role"] == "user" or not turns:
@@ -66,6 +69,8 @@ def main():
     parser.add_argument("--turn-model", default="openai/gpt-6-luna")
     parser.add_argument("--compact-model", default=MODEL)
     parser.add_argument("--instructions", default="")
+    parser.add_argument("--log-only", action="store_true", help="import without turn calls: compactions only")
+    parser.add_argument("--until", type=datetime.fromisoformat, help="stop before this time (ISO, with offset)")
     args = parser.parse_args()
 
     out = Path(args.out)
@@ -75,7 +80,7 @@ def main():
     # One session id for the whole replay: OpenRouter scopes OpenAI's cache to it.
     turn_call = caller(args.turn_model, {"session_id": "optchat-replay"})
     system = turn_prompt(instructions)
-    turns = load(args.db, args.sources.split(","), args.limit)
+    turns = load(args.db, args.sources.split(","), args.limit, args.until)
     if chat.log_.messages:
         # Resume: skip what is logged, up to the next user message.
         last = datetime.fromisoformat(chat.log_.messages[-1]["date"])
@@ -94,7 +99,7 @@ def main():
             previous = lines
             sent, first = [], True
             for c, (message, when) in enumerate(turn):
-                if message["role"] == "assistant" and sent:
+                if message["role"] == "assistant" and sent and not args.log_only:
                     state = f"[turn · {when.isoformat(timespec='minutes')} · telegram · {args.turn_model}]"
                     request = compose(system, view, state, paired(sent), marks)
                     _, usage = turn_call(request, max_tokens=16, tools=TOOLS)
@@ -108,6 +113,9 @@ def main():
                     chat.log(kind, text, when)
             print(f"turn {t + 1}/{len(turns)}: {len(chat.log_.messages)} messages, view {len(lines)} lines, wait {wait:.1f}s", flush=True)
     compactor.idle(600)
+    with chat.changed:
+        chat.view.drain(len(chat.log_.messages), chat._line_bytes, chat._built)
+        chat.log_.save_view(chat.view.lines, chat.view.draining, chat.last_blocks)
 
 
 if __name__ == "__main__":

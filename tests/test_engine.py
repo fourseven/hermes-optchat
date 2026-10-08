@@ -105,3 +105,13 @@ def test_one_chat_per_user_or_channel_across_threads():
     assert chat_key("agent:main:telegram:dm:123456789:229149") == "agent:main:telegram:dm:123456789"
     assert chat_key("agent:main:telegram:dm:123456789") == "agent:main:telegram:dm:123456789"
     assert chat_key(None) == "cli"
+
+
+def test_cron_and_subagents_keep_hermess_own_context(tmp_path):
+    for platform in ("cron", "subagent"):
+        engine = OptChatEngine()
+        engine.on_session_start("s", hermes_home=str(tmp_path), platform=platform, model="m", conversation_id=None)
+        incoming = {"role": "user", "content": "run the job"}
+        assert engine.select_context([incoming], conversation_messages=[incoming], incoming_message=incoming) is None
+        assert "error" in json.loads(engine.handle_tool_call("zoom", {"id": 0, "n": 1}))
+    assert not (tmp_path / "optchat").exists()
