@@ -43,7 +43,8 @@ DATE = {
 def _caller():
     from .openrouter import caller
 
-    return caller()
+    # Reasoning models otherwise spend the whole output budget reasoning and return nothing.
+    return caller(extra_body={"reasoning": {"enabled": False}})
 
 
 def _open_chat(root, system):

@@ -20,7 +20,7 @@ ln -s /path/to/hermes-optchat/optchat "$HERMES_HOME/plugins/optchat"
 hermes config set context.engine optchat
 ```
 
-- Compactions go through OpenRouter with `OPENROUTER_API_KEY` from the Hermes process environment. The model defaults to `anthropic/claude-haiku-5.5`; set `OPTCHAT_COMPACT_MODEL` to change it.
+- Compactions go through OpenRouter with `OPENROUTER_API_KEY` from the Hermes process environment. The model defaults to `qwen/qwen3.7-flash` with reasoning off (a tenth of Haiku 5.5's cost per line in a 30-task bake-off); set `OPTCHAT_COMPACT_MODEL` to change it.
 - Your own instructions (who you are, how you like work done) go in `$HERMES_HOME/optchat/instructions.md`. They follow the system prompt and should stay stable: any change re-writes the cache.
 - Turn off memory-provider plugins; the chat is the memory.
 

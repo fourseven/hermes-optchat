@@ -2,7 +2,7 @@ import os
 
 from openai import OpenAI
 
-MODEL = os.environ.get("OPTCHAT_COMPACT_MODEL", "anthropic/claude-haiku-5.5")
+MODEL = os.environ.get("OPTCHAT_COMPACT_MODEL", "qwen/qwen3.7-flash")
 
 
 def caller(model=MODEL, extra_body=None):
