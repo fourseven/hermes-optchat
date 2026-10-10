@@ -29,13 +29,15 @@ def caller(model=MODEL):
                 "--output-format", "json", "--no-session-persistence", "--setting-sources", "", "--strict-mcp-config"]
         for attempt in range(3):
             try:
-                out = subprocess.run(args, input=prompt, capture_output=True, text=True, timeout=300, cwd=workdir, check=True)
+                out = subprocess.run(args, input=prompt, capture_output=True, text=True, timeout=300, cwd=workdir)
                 break
             except FileNotFoundError:
                 # Claude Code auto-updates replace the binary; a call during the swap finds nothing.
                 if attempt == 2:
                     raise
                 time.sleep(10)
+        if out.returncode and not out.stdout.strip():
+            raise RuntimeError(f"claude -p exited {out.returncode}: {out.stderr[-500:]}")
         events = json.loads(out.stdout)
         result = [e for e in events if e.get("type") == "result"][-1] if isinstance(events, list) else events
         if result.get("is_error") or model not in (result.get("modelUsage") or {}):

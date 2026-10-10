@@ -89,7 +89,7 @@ def main():
 
         compact = claudecode.caller()
     else:
-        compact = caller(args.compact_model)
+        compact = caller(args.compact_model, {"reasoning": {"enabled": False}})
     compactor = Compactor(chat, compact, system_prompt(instructions), lambda: datetime.now(timezone.utc))
     # One session id for the whole replay: OpenRouter scopes OpenAI's cache to it.
     turn_call = caller(args.turn_model, {"session_id": "optchat-replay"})
@@ -105,7 +105,7 @@ def main():
         for t, turn in enumerate(turns):
             started = time.monotonic()
             stuck = 0
-            while not chat.wait_summarized(60):
+            while not (chat.wait_summarized(60) and compactor.idle(60)):
                 # Failed calls retry at the next message, and an import logs nothing until this one settles.
                 # Calls failing for 10 minutes (a usage limit) end the run; rerunning resumes it.
                 stuck = stuck + 1 if chat.tree.failed else 0
