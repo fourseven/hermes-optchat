@@ -54,3 +54,11 @@ def test_unbuilt_leaf_shows_a_placeholder_and_blocks_summarized(tmp_path):
     chat = chat_with(tmp_path, ["x" * 600])
     assert chat.render_view() == ([], "<chat>\n0+1|(not summarized yet: zoom it)\n</chat>")
     assert not chat.wait_summarized(timeout=0)
+
+
+def test_compaction_view_drains_as_merges_land(tmp_path):
+    chat = chat_with(tmp_path, ["a" * 400 for _ in range(100)])
+    assert len(chat.compaction_view(0, 100)[0]) == 25
+    for i in range(50):
+        chat.put(1, i, "m", WHEN)
+    assert len(chat.compaction_view(0, 100)[0]) < 25

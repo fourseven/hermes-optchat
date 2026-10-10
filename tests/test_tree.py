@@ -82,3 +82,14 @@ def test_restart_requeues_unbuilt_work(tmp_path):
     tree = Tree(log)
     assert tree.take() == (0, 1)
     assert not tree.all_leaves_built()
+
+
+def test_a_ready_merge_goes_before_a_new_leaf(tmp_path):
+    log, tree = make(tmp_path)
+    add(log, tree, "unii", LONG)
+    add(log, tree, "unii", LONG)
+    tree.take(), tree.take()
+    tree.put(0, 0, "y" * 300, WHEN)
+    tree.put(0, 1, "z" * 300, WHEN)
+    add(log, tree, "unii", LONG)
+    assert tree.take() == (1, 0)

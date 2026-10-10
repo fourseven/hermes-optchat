@@ -40,6 +40,9 @@ class Tree:
     def take(self):
         if self.retry:
             return self.retry.popleft()
+        # Merges first: the compaction view only shrinks as they land, and every leaf's prompt carries it.
+        if self.merges:
+            return self.merges.popleft()
         messages = len(self.log.messages)
         while self.next_leaf < messages and (0, self.next_leaf) in self.log.nodes:
             self.next_leaf += 1
@@ -47,8 +50,6 @@ class Tree:
             self.started.add(self.next_leaf)
             self.next_leaf += 1
             return (0, self.next_leaf - 1)
-        if self.merges:
-            return self.merges.popleft()
         return None
 
     def fail(self, task):

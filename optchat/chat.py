@@ -62,6 +62,7 @@ class Chat:
     def put(self, l, i, text, when):
         with self.changed:
             self.tree.put(l, i, text, when)
+            self.cview.drain(len(self.log_.messages), self._line_bytes, self._built)
             self.version += 1
             self.changed.notify_all()
 
