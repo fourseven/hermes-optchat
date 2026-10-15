@@ -28,13 +28,22 @@ hermes config set context.engine optchat
 
 **Privacy.** The log keeps messages and tool output unredacted, including any secrets that appeared in tool calls, and summaries can copy them. Protect `$HERMES_HOME/optchat`.
 
+## Remote mode
+
+With `OPTCHAT_REMOTE_URL` and `OPTCHAT_REMOTE_TOKEN` set, chats live in the
+[optchat-memory](https://github.com/fourseven/optchat-memory) service (private) instead of
+`$HERMES_HOME/optchat/chats`. The service compacts; Hermes only logs, renders and reads, and holds
+the chat's write lease while it runs. Unset both to go back to the local folders.
+
 ## Tests
 
 ```sh
 HERMES_SRC=/path/to/hermes-agent uv run pytest -q
 ```
 
-Engine tests need a Hermes checkout on `HERMES_SRC`; the rest are standard library only. No test calls a model.
+Engine tests need a Hermes checkout on `HERMES_SRC`, and remote tests an optchat-memory checkout on
+`OPTCHAT_MEMORY_SRC` (they start its Node server); the rest are standard library only. No test calls
+a model.
 
 ## Replay
 

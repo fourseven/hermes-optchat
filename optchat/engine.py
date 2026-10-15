@@ -1,5 +1,6 @@
 import json
 import logging
+import os
 import re
 import threading
 from datetime import datetime, timezone
@@ -10,6 +11,7 @@ from agent.context_engine import ContextEngine
 from .chat import Chat
 from .compactor import ACK, MARK, Compactor
 from .prompt import system_prompt, turn_prompt
+from .remote import RemoteChat
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +49,21 @@ def _caller():
     return caller(extra_body={"reasoning": {"enabled": False}})
 
 
-def _open_chat(root, system):
-    """One Chat and one Compactor per chat directory, shared by every agent in the process."""
+def _open_chat(root, instructions):
+    """One chat per chat directory, shared by every agent in the process.
+
+    With OPTCHAT_REMOTE_URL set, the chat lives in the optchat-memory service, which compacts it;
+    otherwise in the directory, with a Compactor here.
+    """
     with _chats_lock:
         if root not in _chats:
-            chat = Chat(root)
-            Compactor(chat, _caller(), system, lambda: datetime.now(timezone.utc))
-            _chats[root] = chat
+            url = os.environ.get("OPTCHAT_REMOTE_URL")
+            if url:
+                _chats[root] = RemoteChat(url, os.environ["OPTCHAT_REMOTE_TOKEN"], root.name, "hermes", instructions)
+            else:
+                chat = Chat(root)
+                Compactor(chat, _caller(), system_prompt(instructions), lambda: datetime.now(timezone.utc))
+                _chats[root] = chat
         return _chats[root]
 
 
@@ -161,7 +171,7 @@ class OptChatEngine(ContextEngine):
         path = home / "instructions.md"
         instructions = path.read_text() if path.exists() else ""
         self.system = turn_prompt(instructions)
-        self.chat = _open_chat(home / "chats" / key, system_prompt(instructions))
+        self.chat = _open_chat(home / "chats" / key, instructions)
         self.platform, self.model = platform, model
 
     def clone_for_agent(self):
