@@ -35,7 +35,7 @@ class Log:
         except BlockingIOError:
             self._lock.close()
             raise LogLocked(self.root) from None
-        self.messages = [json.loads(line) for line in self._lines("main")]
+        self.messages = sorted(map(json.loads, self._lines("main")), key=lambda m: m["i"])
         self.nodes = {(n["l"], n["i"]): n["text"] for n in map(json.loads, self._lines("tree"))}
 
     def _lines(self, folder):

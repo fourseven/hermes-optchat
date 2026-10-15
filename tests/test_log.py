@@ -50,3 +50,12 @@ def test_other_long_text_is_split_into_consecutive_messages(tmp_path):
     text = "x" * (SPLIT * 2 + 1)
     assert log.append("user", text, WHEN) == [0, 1, 2]
     assert "".join(m["text"] for m in log.messages) == text
+
+
+def test_reload_keeps_id_order_when_a_message_is_dated_earlier(tmp_path):
+    log = Log(tmp_path)
+    log.append("user", "late", WHEN)
+    log.append("note", "early", datetime(2026, 10, 6, tzinfo=timezone.utc))
+    log.close()
+    log = Log(tmp_path)
+    assert [(m["i"], m["text"]) for m in log.messages] == [(0, "late"), (1, "early")]
