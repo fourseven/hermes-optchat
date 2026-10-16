@@ -171,7 +171,12 @@ class OptChatEngine(ContextEngine):
         path = home / "instructions.md"
         instructions = path.read_text() if path.exists() else ""
         self.system = turn_prompt(instructions)
-        self.chat = _open_chat(home / "chats" / key, instructions)
+        try:
+            self.chat = _open_chat(home / "chats" / key, instructions)
+        except Exception:
+            # Hermes logs this hook's errors at debug only; without a chat the turn runs with no memory.
+            logger.warning("optchat: could not open chat %s; this session runs without it", key, exc_info=True)
+            raise
         self.platform, self.model = platform, model
 
     def clone_for_agent(self):
