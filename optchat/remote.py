@@ -31,7 +31,9 @@ class RemoteChat:
         threading.Thread(target=self._keep_lease, daemon=True).start()
 
     def _request(self, method, path, body=None, lease=False, timeout=30):
-        headers = {"authorization": f"Bearer {self.token}", "content-type": "application/json"}
+        # Cloudflare answers urllib's default user agent with 403 (error 1010).
+        headers = {"authorization": f"Bearer {self.token}", "content-type": "application/json",
+                   "user-agent": "optchat-remote/1"}
         if lease:
             headers["x-lease"] = self.holder
         data = None if body is None else json.dumps(body).encode()
